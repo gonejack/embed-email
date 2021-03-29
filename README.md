@@ -1,6 +1,7 @@
 # embed-email
-Command line tool for embed email images.
+This tool will parse email content, download remote images and replace them as inline images.
 
+Then you can import these fat emails to regular mail clients like Microsoft Outlook or Apple Mail and send them.
 ### Install
 ```shell
 > go get github.com/gonejack/embed-email
