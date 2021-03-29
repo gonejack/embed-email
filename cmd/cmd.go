@@ -156,6 +156,10 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, cidRec
 	src, _ := img.Attr("src")
 
 	switch {
+	case strings.HasPrefix(src, "data:"):
+		return
+	case strings.HasPrefix(src, "cid:"):
+		return
 	case strings.HasPrefix(src, "http"):
 		cid, exist := cidRecords[src]
 		if exist {
@@ -175,7 +179,6 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, cidRec
 			return
 		}
 		if !strings.HasPrefix(fmime.String(), "image") {
-			img.Remove()
 			log.Printf("mime of %s is %s instead of images", src, fmime.String())
 			return
 		}
