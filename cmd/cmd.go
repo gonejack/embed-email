@@ -209,7 +209,7 @@ func (c *EmbedEmail) download(path string, src string) (err error) {
 	defer cancel()
 
 	info, err := os.Stat(path)
-	if err == nil {
+	if err == nil && info.Size() > 0 {
 		headReq, headErr := http.NewRequestWithContext(timeout, http.MethodHead, src, nil)
 		if headErr != nil {
 			return headErr
