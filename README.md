@@ -1,7 +1,6 @@
 # embed-email
-This tool will parse email content, download remote images and replace them as inline images.
+This command parse email content, download remote images and replace them as inline images, then you can import these fat emails to regular mail clients like Microsoft Outlook or Apple Mail to send them.
 
-Then you can import these fat emails to regular mail clients like Microsoft Outlook or Apple Mail and send them.
 ### Install
 ```shell
 > go get github.com/gonejack/embed-email
