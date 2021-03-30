@@ -1,6 +1,10 @@
 # embed-email
 This command parse email content, download remote images and replace them as inline images, then you can import these fat emails to regular mail clients like Microsoft Outlook or Apple Mail to send them.
 
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/gonejack/embed-email)
+![Build](https://github.com/gonejack/embed-email/actions/workflows/go.yml/badge.svg)
+[![GitHub license](https://img.shields.io/github/license/gonejack/embed-email.svg?color=blue)](LICENSE)
+
 ### Install
 ```shell
 > go get github.com/gonejack/embed-email
