@@ -59,9 +59,9 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 		document = c.cleanDoc(document)
 		downloads := c.downloadImages(document)
 
-		cidRecords := make(map[string]string)
+		src2cid := make(map[string]string)
 		document.Find("img").Each(func(i int, img *goquery.Selection) {
-			c.changeRef(img, mail, cidRecords, downloads)
+			c.changeRef(img, mail, src2cid, downloads)
 		})
 
 		htm, err := document.Html()
@@ -149,7 +149,7 @@ func (c *EmbedEmail) downloadImages(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, cidRecords, downloads map[string]string) {
+func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, src2cid, downloads map[string]string) {
 	img.RemoveAttr("loading")
 	img.RemoveAttr("srcset")
 
@@ -161,7 +161,7 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, cidRec
 	case strings.HasPrefix(src, "cid:"):
 		return
 	case strings.HasPrefix(src, "http"):
-		cid, exist := cidRecords[src]
+		cid, exist := src2cid[src]
 		if exist {
 			img.SetAttr("src", fmt.Sprintf("cid:%s", cid))
 			return
@@ -192,7 +192,7 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, cidRec
 
 		cid = md5str(src) + fmime.Extension()
 		{
-			cidRecords[src] = cid
+			src2cid[src] = cid
 		}
 
 		attachment, err := mail.Attach(fd, cid, fmime.String())
