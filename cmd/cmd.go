@@ -35,6 +35,9 @@ type EmbedEmail struct {
 
 func (c *EmbedEmail) Execute(emails []string) (err error) {
 	if len(emails) == 0 {
+		emails, _ = filepath.Glob("*.eml")
+	}
+	if len(emails) == 0 {
 		return errors.New("no eml given")
 	}
 
