@@ -59,7 +59,6 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		document = c.cleanDoc(document)
 		downloads := c.downloadImages(document)
 
 		src2cid := make(map[string]string)
@@ -270,12 +269,6 @@ func (c *EmbedEmail) download(path string, src string) (err error) {
 	}
 
 	return
-}
-func (_ *EmbedEmail) cleanDoc(doc *goquery.Document) *goquery.Document {
-	// remove inoreader ads
-	doc.Find("body").Find(`div:contains("ads from inoreader")`).Closest("center").Remove()
-
-	return doc
 }
 func (c *EmbedEmail) mkdirs() error {
 	err := os.MkdirAll(c.ImagesDir, 0777)
