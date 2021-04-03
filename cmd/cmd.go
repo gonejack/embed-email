@@ -41,7 +41,7 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 		return errors.New("no eml given")
 	}
 
-	err = c.mkdirs()
+	err = c.mkdir()
 	if err != nil {
 		return
 	}
@@ -270,7 +270,7 @@ func (c *EmbedEmail) download(path string, src string) (err error) {
 
 	return
 }
-func (c *EmbedEmail) mkdirs() error {
+func (c *EmbedEmail) mkdir() error {
 	err := os.MkdirAll(c.ImagesDir, 0777)
 	if err != nil {
 		return fmt.Errorf("cannot make images dir %s", err)
