@@ -19,7 +19,7 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
-	"github.com/jordan-wright/email"
+	"github.com/gonejack/email"
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
