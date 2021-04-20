@@ -26,11 +26,10 @@ import (
 )
 
 type EmbedEmail struct {
-	client http.Client
-
+	client    http.Client
+	UserAgent string
 	ImagesDir string
-
-	Verbose bool
+	Verbose   bool
 }
 
 func (c *EmbedEmail) Execute(emails []string) (err error) {
@@ -219,7 +218,7 @@ func (c *EmbedEmail) download(path string, src string) (err error) {
 		if headErr != nil {
 			return headErr
 		}
-		resp, headErr := c.client.Do(headReq)
+		resp, headErr := c.client.Do(c.withUserAgent(headReq))
 		if headErr == nil && info.Size() == resp.ContentLength {
 			return // skip download
 		}
@@ -235,7 +234,7 @@ func (c *EmbedEmail) download(path string, src string) (err error) {
 	if err != nil {
 		return
 	}
-	response, err := c.client.Do(request)
+	response, err := c.client.Do(c.withUserAgent(request))
 	if err != nil {
 		return
 	}
@@ -277,6 +276,10 @@ func (c *EmbedEmail) mkdir() error {
 	}
 
 	return nil
+}
+func (c *EmbedEmail) withUserAgent(request *http.Request) *http.Request {
+	request.Header.Set("user-agent", c.UserAgent)
+	return request
 }
 
 func md5str(s string) string {
