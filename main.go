@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/gonejack/embed-email/cmd"
 	"github.com/spf13/cobra"
@@ -38,10 +39,14 @@ func init() {
 
 func run(c *cobra.Command, args []string) error {
 	exec := cmd.EmbedEmail{
-		UserAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.72 Safari/537.36",
 		ImagesDir: "images",
 		Verbose:   verbose,
 	}
+
+	if len(args) == 0 {
+		args, _ = filepath.Glob("*.eml")
+	}
+
 	return exec.Execute(args)
 }
 
