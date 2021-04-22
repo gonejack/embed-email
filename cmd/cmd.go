@@ -5,7 +5,6 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
-
 	"io/ioutil"
 	"log"
 	"net/url"
@@ -116,10 +115,16 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 
 	getter := get.DefaultGetter()
 	getter.Verbose = c.Verbose
-	eRefs, errs := getter.BatchInOrder(refs, paths, 3, time.Minute*2)
-	for i := range eRefs {
-		log.Printf("download %s fail: %s", eRefs[i], errs[i])
+	getter.AfterDL = func(ref string, path string, err error) {
+		if err == nil {
+			if c.Verbose {
+				log.Printf("%s as %s done", ref, path)
+			}
+		} else {
+			log.Printf("%s as %s failed: %s", ref, path, err)
+		}
 	}
+	getter.BatchInOrder(refs, paths, 3, time.Minute*2)
 
 	return downloads
 }
