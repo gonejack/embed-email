@@ -42,30 +42,30 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return err
 		}
 
-		document, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
+		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
 		if err != nil {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		saved := c.saveImages(document)
-		ref2cid := make(map[string]string)
-		document.Find("img").Each(func(i int, img *goquery.Selection) {
-			c.changeRef(img, mail, ref2cid, saved)
+		imgFiles := c.saveImages(doc)
+		imgCIDs := make(map[string]string)
+		doc.Find("img").Each(func(i int, img *goquery.Selection) {
+			c.changeRef(img, mail, imgCIDs, imgFiles)
 		})
 
-		htm, err := document.Html()
+		html, err := doc.Html()
 		if err != nil {
 			return fmt.Errorf("cannot generate html: %s", err)
 		}
+		mail.HTML = []byte(html)
 
-		mail.HTML = []byte(htm)
 		data, err := mail.Bytes()
 		if err != nil {
 			return fmt.Errorf("cannot generate eml: %s", err)
 		}
 
-		target := strings.TrimSuffix(eml, ".eml") + ".embed.eml"
-		err = ioutil.WriteFile(target, data, 0766)
+		embed := strings.TrimSuffix(eml, ".eml") + ".embed.eml"
+		err = ioutil.WriteFile(embed, data, 0766)
 		if err != nil {
 			return fmt.Errorf("cannot write eml: %s", err)
 		}
@@ -92,11 +92,12 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 	var refs, paths []string
 	doc.Find("img").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
+
 		if !strings.HasPrefix(src, "http") {
 			return
 		}
 
-		localFile, exist := downloads[src]
+		localpath, exist := downloads[src]
 		if exist {
 			return
 		}
@@ -106,11 +107,12 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 			log.Printf("parse %s fail: %s", src, err)
 			return
 		}
-		localFile = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
+		localpath = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
 		refs = append(refs, src)
-		paths = append(paths, localFile)
-		downloads[src] = localFile
+		paths = append(paths, localpath)
+
+		downloads[src] = localpath
 	})
 
 	getter := get.DefaultGetter()
@@ -128,7 +130,7 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, src2cid, downloads map[string]string) {
+func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, imageCIDs, imageFiles map[string]string) {
 	img.RemoveAttr("loading")
 	img.RemoveAttr("srcset")
 
@@ -139,48 +141,47 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, src2ci
 	case strings.HasPrefix(src, "cid:"):
 		return
 	case strings.HasPrefix(src, "http"):
-		cid, exist := src2cid[src]
+		imageCID, exist := imageCIDs[src]
 		if exist {
-			img.SetAttr("src", fmt.Sprintf("cid:%s", cid))
+			img.SetAttr("src", fmt.Sprintf("cid:%s", imageCID))
 			return
 		}
 
-		localFile := downloads[src]
+		imageFile := imageFiles[src]
 		if c.Verbose {
-			log.Printf("replace %s as %s", src, localFile)
+			log.Printf("replace %s as %s", src, imageFile)
 		}
 
 		// check mime
-		fmime, err := mimetype.DetectFile(localFile)
-		if err != nil {
+		imageMIME, err := mimetype.DetectFile(imageFile)
+		switch {
+		case err != nil:
 			log.Printf("cannot detect image mime of %s: %s", src, err)
 			return
-		}
-		if !strings.HasPrefix(fmime.String(), "image") {
-			log.Printf("mime of %s is %s instead of images", src, fmime.String())
+		case !strings.HasPrefix(imageMIME.String(), "image"):
+			log.Printf("mime of %s is %s instead of images", src, imageMIME.String())
 			return
 		}
 
 		// add image
-		fd, err := os.Open(localFile)
+		imageReader, err := os.Open(imageFile)
 		if err != nil {
-			log.Printf("cannot open %s: %s", localFile, err)
+			log.Printf("cannot open %s: %s", imageFile, err)
+			return
 		}
-		defer fd.Close()
+		defer imageReader.Close()
 
-		cid = md5str(src) + fmime.Extension()
-		{
-			src2cid[src] = cid
-		}
+		imageCID = md5str(src) + imageMIME.Extension()
+		imageCIDs[src] = imageCID
 
-		attachment, err := mail.Attach(fd, cid, fmime.String())
+		attachment, err := mail.Attach(imageReader, imageCID, imageMIME.String())
 		if err != nil {
-			log.Printf("cannot attach %s: %s", fd.Name(), err)
+			log.Printf("cannot attach %s: %s", imageReader.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true
 
-		img.SetAttr("src", fmt.Sprintf("cid:%s", cid))
+		img.SetAttr("src", fmt.Sprintf("cid:%s", imageCID))
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
 	}
