@@ -20,8 +20,8 @@ import (
 )
 
 type EmbedEmail struct {
-	ImagesDir string
-	Verbose   bool
+	MediaDir string
+	Verbose  bool
 }
 
 func (c *EmbedEmail) Execute(emails []string) (err error) {
@@ -47,9 +47,9 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		imgFiles := c.saveImages(doc)
+		imgFiles := c.saveMedia(doc)
 		imgCIDs := make(map[string]string)
-		doc.Find("img").Each(func(i int, img *goquery.Selection) {
+		doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
 			c.changeRef(img, mail, imgCIDs, imgFiles)
 		})
 
@@ -86,11 +86,11 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	}
 	return mail, nil
 }
-func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
+func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 	downloads := make(map[string]string)
 
 	var refs, paths []string
-	doc.Find("img").Each(func(i int, img *goquery.Selection) {
+	doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
 
 		if !strings.HasPrefix(src, "http") {
@@ -107,7 +107,7 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 			log.Printf("parse %s fail: %s", src, err)
 			return
 		}
-		localpath = filepath.Join(c.ImagesDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
+		localpath = filepath.Join(c.MediaDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
 		refs = append(refs, src)
 		paths = append(paths, localpath)
@@ -130,7 +130,7 @@ func (c *EmbedEmail) saveImages(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, imageCIDs, imageFiles map[string]string) {
+func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, mediaCIDs, mediaFiles map[string]string) {
 	img.RemoveAttr("loading")
 	img.RemoveAttr("srcset")
 
@@ -141,53 +141,55 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, imageC
 	case strings.HasPrefix(src, "cid:"):
 		return
 	case strings.HasPrefix(src, "http"):
-		imageCID, exist := imageCIDs[src]
+		mediaCID, exist := mediaCIDs[src]
 		if exist {
-			img.SetAttr("src", fmt.Sprintf("cid:%s", imageCID))
+			img.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
 			return
 		}
 
-		imageFile := imageFiles[src]
+		mediaFile := mediaFiles[src]
 		if c.Verbose {
-			log.Printf("replace %s as %s", src, imageFile)
+			log.Printf("replace %s as %s", src, mediaFile)
 		}
 
 		// check mime
-		imageMIME, err := mimetype.DetectFile(imageFile)
+		mediaMIME, err := mimetype.DetectFile(mediaFile)
 		switch {
 		case err != nil:
-			log.Printf("cannot detect image mime of %s: %s", src, err)
+			log.Printf("cannot detect mime of %s: %s", src, err)
 			return
-		case !strings.HasPrefix(imageMIME.String(), "image"):
-			log.Printf("mime of %s is %s instead of images", src, imageMIME.String())
+		case strings.HasPrefix(mediaMIME.String(), "video"):
+		case strings.HasPrefix(mediaMIME.String(), "image"):
+		default:
+			log.Printf("mime of %s is %s instead of images", src, mediaMIME.String())
 			return
 		}
 
 		// add image
-		imageReader, err := os.Open(imageFile)
+		mediaReader, err := os.Open(mediaFile)
 		if err != nil {
-			log.Printf("cannot open %s: %s", imageFile, err)
+			log.Printf("cannot open %s: %s", mediaFile, err)
 			return
 		}
-		defer imageReader.Close()
+		defer mediaReader.Close()
 
-		imageCID = md5str(src) + imageMIME.Extension()
-		imageCIDs[src] = imageCID
+		mediaCID = md5str(src) + mediaMIME.Extension()
+		mediaCIDs[src] = mediaCID
 
-		attachment, err := mail.Attach(imageReader, imageCID, imageMIME.String())
+		attachment, err := mail.Attach(mediaReader, mediaCID, mediaMIME.String())
 		if err != nil {
-			log.Printf("cannot attach %s: %s", imageReader.Name(), err)
+			log.Printf("cannot attach %s: %s", mediaReader.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true
 
-		img.SetAttr("src", fmt.Sprintf("cid:%s", imageCID))
+		img.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
 	}
 }
 func (c *EmbedEmail) mkdir() error {
-	err := os.MkdirAll(c.ImagesDir, 0777)
+	err := os.MkdirAll(c.MediaDir, 0777)
 	if err != nil {
 		return fmt.Errorf("cannot make images dir %s", err)
 	}

@@ -39,8 +39,8 @@ func init() {
 
 func run(c *cobra.Command, args []string) error {
 	exec := cmd.EmbedEmail{
-		ImagesDir: "images",
-		Verbose:   verbose,
+		MediaDir: "media",
+		Verbose:  verbose,
 	}
 
 	if len(args) == 0 {
