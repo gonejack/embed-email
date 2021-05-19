@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net/url"
@@ -35,8 +36,22 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 	}
 
 	for _, eml := range emails {
-		log.Printf("procssing %s", eml)
+		if strings.HasSuffix(eml, ".embed.eml") {
+			if c.Verbose {
+				log.Printf("skipped %s", eml)
+			}
+			continue
+		}
 
+		embed := strings.TrimSuffix(eml, ".eml") + ".embed.eml"
+		if _, e := os.Stat(embed); !errors.Is(e, fs.ErrNotExist) {
+			if c.Verbose {
+				log.Printf("skipped %s: expected .embed.eml file already exist", eml)
+			}
+			continue
+		}
+
+		log.Printf("process %s start", eml)
 		mail, err := c.openEmail(eml)
 		if err != nil {
 			return err
@@ -64,7 +79,6 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return fmt.Errorf("cannot generate eml: %s", err)
 		}
 
-		embed := strings.TrimSuffix(eml, ".eml") + ".embed.eml"
 		err = ioutil.WriteFile(embed, data, 0766)
 		if err != nil {
 			return fmt.Errorf("cannot write eml: %s", err)
