@@ -51,7 +51,7 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			continue
 		}
 
-		log.Printf("process %s start", eml)
+		log.Printf("process %s", eml)
 		mail, err := c.openEmail(eml)
 		if err != nil {
 			return err
