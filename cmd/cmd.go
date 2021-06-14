@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,8 +22,9 @@ import (
 )
 
 type EmbedEmail struct {
-	MediaDir string
-	Verbose  bool
+	MediaDir   string
+	ConvertGIF bool // convert gif to video
+	Verbose    bool
 }
 
 func (c *EmbedEmail) Execute(emails []string) (err error) {
@@ -62,10 +64,47 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		imgFiles := c.saveMedia(doc)
-		imgCIDs := make(map[string]string)
-		doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
-			c.changeRef(img, mail, imgCIDs, imgFiles)
+		files := c.saveMedia(doc)
+		cids := make(map[string]string)
+		doc.Find("img").Each(func(i int, img *goquery.Selection) {
+			if !c.ConvertGIF {
+				return
+			}
+
+			src, _ := img.Attr("src")
+			if !strings.HasSuffix(src, ".gif") {
+				return
+			}
+
+			gif, exist := files[src]
+			if !exist {
+				return
+			}
+			mp4src := src + ".mp4"
+			mp4 := gif + ".mp4"
+
+			// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
+			cmd := exec.Command(
+				"ffmpeg",
+				"-y", // overwrite output
+				"-i", gif,
+				"-movflags", "faststart",
+				"-pix_fmt", "yuv420p",
+				"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+				mp4,
+			)
+			err := cmd.Run()
+			if err != nil {
+				log.Printf("convert %s => %s error: %s", gif, mp4, err)
+				return
+			}
+
+			tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
+			files[mp4src] = mp4
+			img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
+		})
+		doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
+			c.changeRef(e, mail, cids, files)
 		})
 
 		html, err := doc.Html()
@@ -87,7 +126,6 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 
 	return
 }
-
 func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	file, err := os.Open(eml)
 	if err != nil {
@@ -144,12 +182,14 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, mediaCIDs, mediaFiles map[string]string) {
-	img.RemoveAttr("loading")
-	img.RemoveAttr("srcset")
+func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCIDs, mediaFiles map[string]string) {
+	e.RemoveAttr("loading")
+	e.RemoveAttr("srcset")
 
-	src, _ := img.Attr("src")
+	src, _ := e.Attr("src")
 	switch {
+	case src == "":
+		return
 	case strings.HasPrefix(src, "data:"):
 		return
 	case strings.HasPrefix(src, "cid:"):
@@ -157,7 +197,7 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, mediaC
 	case strings.HasPrefix(src, "http"):
 		mediaCID, exist := mediaCIDs[src]
 		if exist {
-			img.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
+			e.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
 			return
 		}
 
@@ -167,15 +207,15 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, mediaC
 		}
 
 		// check mime
-		mediaMIME, err := mimetype.DetectFile(mediaFile)
+		fmime, err := mimetype.DetectFile(mediaFile)
 		switch {
 		case err != nil:
 			log.Printf("cannot detect mime of %s: %s", src, err)
 			return
-		case strings.HasPrefix(mediaMIME.String(), "video"):
-		case strings.HasPrefix(mediaMIME.String(), "image"):
+		case strings.HasPrefix(fmime.String(), "video"):
+		case strings.HasPrefix(fmime.String(), "image"):
 		default:
-			log.Printf("mime of %s is %s instead of images", src, mediaMIME.String())
+			log.Printf("mime of %s is %s instead of images", src, fmime.String())
 			return
 		}
 
@@ -187,17 +227,17 @@ func (c *EmbedEmail) changeRef(img *goquery.Selection, mail *email.Email, mediaC
 		}
 		defer mediaReader.Close()
 
-		mediaCID = md5str(src) + mediaMIME.Extension()
+		mediaCID = md5str(src) + fmime.Extension()
 		mediaCIDs[src] = mediaCID
 
-		attachment, err := mail.Attach(mediaReader, mediaCID, mediaMIME.String())
+		attachment, err := mail.Attach(mediaReader, mediaCID, fmime.String())
 		if err != nil {
 			log.Printf("cannot attach %s: %s", mediaReader.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true
 
-		img.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
+		e.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
 	}

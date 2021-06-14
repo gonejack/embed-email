@@ -5,13 +5,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/gonejack/embed-email/cmd"
 	"github.com/spf13/cobra"
+
+	"github.com/gonejack/embed-email/cmd"
 )
 
 var (
-	verbose = false
-	prog    = &cobra.Command{
+	convertGIF bool
+	verbose    bool
+
+	prog = &cobra.Command{
 		Use:   "embed-email *.eml",
 		Short: "Command line tool for embed images within email.",
 		Run: func(c *cobra.Command, args []string) {
@@ -27,20 +30,17 @@ func init() {
 	log.SetOutput(os.Stdout)
 
 	prog.Flags().SortFlags = false
-	prog.PersistentFlags().SortFlags = false
-	prog.PersistentFlags().BoolVarP(
-		&verbose,
-		"verbose",
-		"v",
-		false,
-		"verbose",
-	)
+	pfs := prog.PersistentFlags()
+	pfs.SortFlags = false
+	pfs.BoolVarP(&convertGIF, "convert-gif", "", true, "convert gif to video using ffmpeg, --convert-gif=false to disable")
+	pfs.BoolVarP(&verbose, "verbose", "v", false, "verbose")
 }
 
 func run(c *cobra.Command, args []string) error {
 	exec := cmd.EmbedEmail{
-		MediaDir: "media",
-		Verbose:  verbose,
+		MediaDir:   "media",
+		ConvertGIF: convertGIF,
+		Verbose:    verbose,
 	}
 
 	if len(args) == 0 {
