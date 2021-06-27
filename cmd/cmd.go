@@ -72,15 +72,22 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			}
 
 			src, _ := img.Attr("src")
-			if !strings.HasSuffix(src, ".gif") {
+			if src == "" {
 				return
 			}
+
+			u, err := url.Parse(src)
+			if err != nil || !strings.HasSuffix(u.Path, ".gif") {
+				return
+			}
+			u.RawQuery = ""
 
 			gif, exist := files[src]
 			if !exist {
 				return
 			}
-			mp4src := src + ".mp4"
+
+			mp4src := u.String() + ".mp4"
 			mp4 := gif + ".mp4"
 
 			// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
@@ -93,7 +100,7 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 				"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
 				mp4,
 			)
-			err := cmd.Run()
+			err = cmd.Run()
 			if err != nil {
 				log.Printf("convert %s => %s error: %s", gif, mp4, err)
 				return
