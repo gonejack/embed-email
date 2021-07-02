@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gonejack/email"
 	"github.com/gonejack/get"
@@ -84,6 +85,11 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 
 			gif, exist := files[src]
 			if !exist {
+				return
+			}
+
+			info, err := os.Stat(gif)
+			if err != nil || info.Size() < 300*humanize.KiByte {
 				return
 			}
 
