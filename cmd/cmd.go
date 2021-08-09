@@ -24,7 +24,7 @@ import (
 
 type EmbedEmail struct {
 	MediaDir   string
-	ConvertGIF bool // convert gif to video
+	ConvertGIF bool // convert gif to webp
 	Verbose    bool
 }
 
@@ -93,8 +93,8 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 				return
 			}
 
-			mp4src := u.String() + ".mp4"
-			mp4 := gif + ".mp4"
+			webpsrc := u.String() + ".webp"
+			webp := gif + ".webp"
 
 			// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
 			cmd := exec.Command(
@@ -104,17 +104,20 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 				"-movflags", "faststart",
 				"-pix_fmt", "yuv420p",
 				"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-				mp4,
+				webp,
 			)
 			err = cmd.Run()
 			if err != nil {
-				log.Printf("convert %s => %s error: %s", gif, mp4, err)
+				log.Printf("convert %s => %s error: %s", gif, webp, err)
 				return
 			}
 
-			tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
-			files[mp4src] = mp4
-			img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
+			//tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
+			//files[mp4src] = mp4
+			//img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
+
+			files[webpsrc] = webp
+			img.SetAttr("src", webpsrc)
 		})
 		doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
 			c.changeRef(e, mail, cids, files)

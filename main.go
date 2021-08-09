@@ -32,7 +32,7 @@ func init() {
 	prog.Flags().SortFlags = false
 	pfs := prog.PersistentFlags()
 	pfs.SortFlags = false
-	pfs.BoolVarP(&convertGIF, "convert-gif", "", true, "convert gif to video using ffmpeg, --convert-gif=false to disable")
+	pfs.BoolVarP(&convertGIF, "convert-gif", "", true, "convert gif to webp using ffmpeg, --convert-gif=false to disable")
 	pfs.BoolVarP(&verbose, "verbose", "v", false, "verbose")
 }
 
