@@ -180,18 +180,23 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 		downloads[src] = localpath
 	})
 
-	getter := get.DefaultGetter()
-	getter.Verbose = c.Verbose
-	getter.AfterDL = func(ref string, path string, err error) {
-		if err == nil {
-			if c.Verbose {
-				log.Printf("%s as %s done", ref, path)
-			}
-		} else {
-			log.Printf("%s as %s failed: %s", ref, path, err)
+	gt := get.DefaultGetter()
+	gt.Verbose = c.Verbose
+	gt.BeforeDL = func(ref string, path string) {
+		if c.Verbose {
+			log.Printf("download %s => %s", ref, path)
 		}
 	}
-	getter.BatchInOrder(refs, paths, 3, time.Minute*2)
+	gt.AfterDL = func(ref string, path string, err error) {
+		if err == nil {
+			if c.Verbose {
+				log.Printf("download %s as %s done", ref, path)
+			}
+		} else {
+			log.Printf("download %s as %s failed: %s", ref, path, err)
+		}
+	}
+	gt.BatchInOrder(refs, paths, 3, time.Minute*2)
 
 	return downloads
 }
@@ -260,7 +265,6 @@ func (c *EmbedEmail) mkdir() error {
 	if err != nil {
 		return fmt.Errorf("cannot make images dir %s", err)
 	}
-
 	return nil
 }
 
