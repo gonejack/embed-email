@@ -181,7 +181,6 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 	})
 
 	gt := get.DefaultGetter()
-	gt.Verbose = c.Verbose
 	gt.BeforeDL = func(ref string, path string) {
 		if c.Verbose {
 			log.Printf("download %s => %s", ref, path)
