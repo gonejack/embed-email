@@ -153,8 +153,8 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 }
 func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 	downloads := make(map[string]string)
+	tasks := get.NewDownloadTasks()
 
-	var refs, paths []string
 	doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
 
@@ -174,28 +174,26 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 		}
 		localpath = filepath.Join(c.MediaDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
 
-		refs = append(refs, src)
-		paths = append(paths, localpath)
-
 		downloads[src] = localpath
+		tasks.Add(src, localpath)
 	})
 
-	gt := get.DefaultGetter()
-	gt.BeforeDL = func(ref string, path string) {
+	g := get.Default()
+	g.OnEachStart = func(t *get.DownloadTask) {
 		if c.Verbose {
-			log.Printf("download %s => %s", ref, path)
+			log.Printf("download %s => %s", t.Link, t.Path)
 		}
 	}
-	gt.AfterDL = func(ref string, path string, err error) {
-		if err == nil {
-			if c.Verbose {
-				log.Printf("download %s as %s done", ref, path)
-			}
-		} else {
-			log.Printf("download %s as %s failed: %s", ref, path, err)
+	g.OnEachStop = func(t *get.DownloadTask) {
+		if t.Err != nil {
+			log.Printf("download %s as %s failed: %s", t.Link, t.Path, t.Err)
+			return
+		}
+		if c.Verbose {
+			log.Printf("download %s as %s done", t.Link, t.Path)
 		}
 	}
-	gt.BatchInOrder(refs, paths, 3, time.Minute*2)
+	g.Batch(tasks, 3, time.Minute*2)
 
 	return downloads
 }
