@@ -8,6 +8,8 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"net/textproto"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/djherbis/times"
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gonejack/email"
@@ -234,20 +237,30 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 			return
 		}
 
+		// read time
+		header := make(textproto.MIMEHeader)
+		if s, e := times.Stat(mediaFile); e == nil {
+			t := s.ModTime()
+			if s.HasBirthTime() {
+				t = s.BirthTime()
+			}
+			header.Set("last-modified", t.Format(http.TimeFormat))
+		}
+
 		// add image
-		mediaReader, err := os.Open(mediaFile)
+		reader, err := os.Open(mediaFile)
 		if err != nil {
 			log.Printf("cannot open %s: %s", mediaFile, err)
 			return
 		}
-		defer mediaReader.Close()
+		defer reader.Close()
 
 		mediaCID = md5str(src) + fmime.Extension()
 		mediaCIDs[src] = mediaCID
 
-		attachment, err := mail.Attach(mediaReader, mediaCID, fmime.String())
+		attachment, err := mail.AttachWithHeaders(reader, mediaCID, fmime.String(), header)
 		if err != nil {
-			log.Printf("cannot attach %s: %s", mediaReader.Name(), err)
+			log.Printf("cannot attach %s: %s", reader.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true

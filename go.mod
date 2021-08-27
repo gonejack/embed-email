@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/PuerkitoBio/goquery v1.6.1
+	github.com/djherbis/times v1.5.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gabriel-vasile/mimetype v1.2.0
 	github.com/gonejack/email v1.0.5
