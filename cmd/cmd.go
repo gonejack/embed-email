@@ -206,7 +206,7 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 			log.Printf("download %s => %s", t.Link, t.Path)
 		}
 	}
-	g.Batch(tasks, 3, time.Minute*2).ForEach(func(t *get.DownloadTask) {
+	g.OnEachStop = func(t *get.DownloadTask) {
 		if t.Err != nil {
 			log.Printf("download %s as %s failed: %s", t.Link, t.Path, t.Err)
 			return
@@ -214,7 +214,8 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 		if c.Verbose {
 			log.Printf("download %s as %s done", t.Link, t.Path)
 		}
-	})
+	}
+	g.Batch(tasks, 3, time.Minute*2)
 
 	return downloads
 }
