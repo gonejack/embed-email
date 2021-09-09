@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/alecthomas/kong"
 	"github.com/djherbis/times"
 	"github.com/dustin/go-humanize"
 	"github.com/gabriel-vasile/mimetype"
@@ -25,22 +26,40 @@ import (
 	"github.com/gonejack/get"
 )
 
-type EmbedEmail struct {
-	MediaDir   string
-	ConvertGIF bool // convert gif to mp4
-	Verbose    bool
+type options struct {
+	ConvertGif bool `name:"convert-gif" default:"true" help:"Convert gif to mp4 with ffmpeg."`
+	Verbose    bool `short:"v" help:"Verbose printing."`
+
+	Eml []string `arg:"" optional:""`
 }
 
-func (c *EmbedEmail) Execute(emails []string) (err error) {
-	if len(emails) == 0 {
-		return errors.New("no eml given")
+type EmbedEmail struct {
+	options
+	MediaDir string
+}
+
+func (c *EmbedEmail) Run() (err error) {
+	kong.Parse(&c.options,
+		kong.Name("embed-email"),
+		kong.Description("Command line tool for embed images within email."),
+		kong.UsageOnError(),
+	)
+
+	if len(c.Eml) == 0 {
+		c.Eml, _ = filepath.Glob("*.eml")
+	}
+	if len(c.Eml) == 0 {
+		return errors.New("not .eml file found")
 	}
 
-	err = c.mkdir()
+	err = os.MkdirAll(c.MediaDir, 0777)
 	if err != nil {
-		return
+		return fmt.Errorf("cannot make dir %s", err)
 	}
 
+	return c.process(c.Eml)
+}
+func (c *EmbedEmail) process(emails []string) (err error) {
 	for _, eml := range emails {
 		if strings.HasSuffix(eml, ".embed.eml") {
 			if c.Verbose {
@@ -68,59 +87,59 @@ func (c *EmbedEmail) Execute(emails []string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		files := c.saveMedia(doc)
+		saved := c.saveMedia(doc)
 		cids := make(map[string]string)
-		doc.Find("img").Each(func(i int, img *goquery.Selection) {
-			if !c.ConvertGIF {
-				return
-			}
 
-			src, _ := img.Attr("src")
-			if src == "" {
-				return
-			}
+		if c.ConvertGif {
+			doc.Find("img").Each(func(i int, img *goquery.Selection) {
+				src, _ := img.Attr("src")
+				if src == "" {
+					return
+				}
 
-			u, err := url.Parse(src)
-			if err != nil || !strings.HasSuffix(u.Path, ".gif") {
-				return
-			}
-			u.RawQuery = ""
+				u, err := url.Parse(src)
+				if err != nil || !strings.HasSuffix(u.Path, ".gif") {
+					return
+				}
+				u.RawQuery = ""
 
-			gif, exist := files[src]
-			if !exist {
-				return
-			}
+				gif, exist := saved[src]
+				if !exist {
+					return
+				}
 
-			info, err := os.Stat(gif)
-			if err != nil || info.Size() < 300*humanize.KiByte {
-				return
-			}
+				info, err := os.Stat(gif)
+				if err != nil || info.Size() < 300*humanize.KiByte {
+					return
+				}
 
-			mp4src := u.String() + ".mp4"
-			mp4 := gif + ".mp4"
+				mp4src := u.String() + ".mp4"
+				mp4 := gif + ".mp4"
 
-			// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
-			cmd := exec.Command(
-				"ffmpeg",
-				"-y", // overwrite output
-				"-i", gif,
-				"-movflags", "faststart",
-				"-pix_fmt", "yuv420p",
-				"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-				mp4,
-			)
-			err = cmd.Run()
-			if err != nil {
-				log.Printf("convert %s => %s error: %s", gif, mp4, err)
-				return
-			}
+				// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
+				cmd := exec.Command(
+					"ffmpeg",
+					"-y", // overwrite output
+					"-i", gif,
+					"-movflags", "faststart",
+					"-pix_fmt", "yuv420p",
+					"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+					mp4,
+				)
+				err = cmd.Run()
+				if err != nil {
+					log.Printf("convert %s => %s error: %s", gif, mp4, err)
+					return
+				}
 
-			tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
-			files[mp4src] = mp4
-			img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
-		})
+				tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
+				saved[mp4src] = mp4
+				img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
+			})
+		}
+
 		doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
-			c.changeRef(e, mail, cids, files)
+			c.changeRef(e, mail, cids, saved)
 		})
 
 		html, err := doc.Html()
@@ -187,7 +206,7 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 			log.Printf("download %s => %s", t.Link, t.Path)
 		}
 	}
-	g.OnEachStop = func(t *get.DownloadTask) {
+	g.Batch(tasks, 3, time.Minute*2).ForEach(func(t *get.DownloadTask) {
 		if t.Err != nil {
 			log.Printf("download %s as %s failed: %s", t.Link, t.Path, t.Err)
 			return
@@ -195,8 +214,7 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 		if c.Verbose {
 			log.Printf("download %s as %s done", t.Link, t.Path)
 		}
-	}
-	g.Batch(tasks, 3, time.Minute*2)
+	})
 
 	return downloads
 }
@@ -269,13 +287,6 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
 	}
-}
-func (c *EmbedEmail) mkdir() error {
-	err := os.MkdirAll(c.MediaDir, 0777)
-	if err != nil {
-		return fmt.Errorf("cannot make images dir %s", err)
-	}
-	return nil
 }
 
 func md5str(s string) string {
