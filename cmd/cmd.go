@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/textproto"
@@ -108,7 +107,7 @@ func (c *EmbedEmail) process() (err error) {
 			return fmt.Errorf("cannot generate eml: %s", err)
 		}
 
-		err = ioutil.WriteFile(embed, data, 0766)
+		err = os.WriteFile(embed, data, 0666)
 		if err != nil {
 			return fmt.Errorf("cannot write eml: %s", err)
 		}

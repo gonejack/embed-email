@@ -15,12 +15,15 @@ This command parse email content, download remote images and replace them as inl
 > embed-email *.eml
 ```
 ```
+Usage: embed-email [<eml> ...]
+
 Command line tool for embed images within email.
 
-Usage:
-  embed-email *.eml [flags]
+Arguments:
+  [<eml> ...]
 
 Flags:
-  -v, --verbose   verbose
-  -h, --help      help for embed-email
+  -h, --help          Show context-sensitive help.
+      --retain-gif    will not convert gif into mp4.'
+  -v, --verbose       Verbose printing.
 ```
