@@ -27,8 +27,8 @@ import (
 )
 
 type options struct {
-	ConvertGif bool `name:"convert-gif" default:"true" help:"Convert gif to mp4 with ffmpeg."`
-	Verbose    bool `short:"v" help:"Verbose printing."`
+	RetainGif bool `name:"retain-gif" help:"will not convert gif into mp4.'"`
+	Verbose   bool `short:"v" help:"Verbose printing."`
 
 	Eml []string `arg:"" optional:""`
 }
@@ -44,7 +44,6 @@ func (c *EmbedEmail) Run() (err error) {
 		kong.Description("Command line tool for embed images within email."),
 		kong.UsageOnError(),
 	)
-
 	if len(c.Eml) == 0 {
 		c.Eml, _ = filepath.Glob("*.eml")
 	}
@@ -57,10 +56,10 @@ func (c *EmbedEmail) Run() (err error) {
 		return fmt.Errorf("cannot make dir %s", err)
 	}
 
-	return c.process(c.Eml)
+	return c.process()
 }
-func (c *EmbedEmail) process(emails []string) (err error) {
-	for _, eml := range emails {
+func (c *EmbedEmail) process() (err error) {
+	for _, eml := range c.Eml {
 		if strings.HasSuffix(eml, ".embed.eml") {
 			if c.Verbose {
 				log.Printf("skipped %s", eml)
@@ -87,59 +86,15 @@ func (c *EmbedEmail) process(emails []string) (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
-		saved := c.saveMedia(doc)
+		saves := c.saveMedia(doc)
 		cids := make(map[string]string)
 
-		if c.ConvertGif {
-			doc.Find("img").Each(func(i int, img *goquery.Selection) {
-				src, _ := img.Attr("src")
-				if src == "" {
-					return
-				}
-
-				u, err := url.Parse(src)
-				if err != nil || !strings.HasSuffix(u.Path, ".gif") {
-					return
-				}
-				u.RawQuery = ""
-
-				gif, exist := saved[src]
-				if !exist {
-					return
-				}
-
-				info, err := os.Stat(gif)
-				if err != nil || info.Size() < 300*humanize.KiByte {
-					return
-				}
-
-				mp4src := u.String() + ".mp4"
-				mp4 := gif + ".mp4"
-
-				// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
-				cmd := exec.Command(
-					"ffmpeg",
-					"-y", // overwrite output
-					"-i", gif,
-					"-movflags", "faststart",
-					"-pix_fmt", "yuv420p",
-					"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-					mp4,
-				)
-				err = cmd.Run()
-				if err != nil {
-					log.Printf("convert %s => %s error: %s", gif, mp4, err)
-					return
-				}
-
-				tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
-				saved[mp4src] = mp4
-				img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
-			})
+		if !c.RetainGif {
+			c.convertGif(doc, saves)
 		}
 
 		doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
-			c.changeRef(e, mail, cids, saved)
+			c.changeRef(e, mail, cids, saves)
 		})
 
 		html, err := doc.Html()
@@ -160,6 +115,59 @@ func (c *EmbedEmail) process(emails []string) (err error) {
 	}
 
 	return
+}
+func (c *EmbedEmail) convertGif(doc *goquery.Document, media map[string]string) {
+	_, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		log.Printf("ffmpeg not found, will not convert gif into mp4")
+		return
+	}
+
+	doc.Find("img").Each(func(i int, img *goquery.Selection) {
+		src, _ := img.Attr("src")
+		if src == "" {
+			return
+		}
+
+		u, err := url.Parse(src)
+		if err != nil || !strings.HasSuffix(u.Path, ".gif") {
+			return
+		}
+		u.RawQuery = ""
+
+		gif, exist := media[src]
+		if !exist {
+			return
+		}
+
+		info, err := os.Stat(gif)
+		if err != nil || info.Size() < 300*humanize.KiByte {
+			return
+		}
+
+		mp4src := u.String() + ".mp4"
+		mp4 := gif + ".mp4"
+
+		// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
+		cmd := exec.Command(
+			"ffmpeg",
+			"-y", // overwrite output
+			"-i", gif,
+			"-movflags", "faststart",
+			"-pix_fmt", "yuv420p",
+			"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+			mp4,
+		)
+		err = cmd.Run()
+		if err != nil {
+			log.Printf("convert %s => %s error: %s", gif, mp4, err)
+			return
+		}
+
+		tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
+		media[mp4src] = mp4
+		img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
+	})
 }
 func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	file, err := os.Open(eml)
