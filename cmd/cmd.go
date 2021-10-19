@@ -229,6 +229,14 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCIDs, mediaFiles map[string]string) {
 	e.RemoveAttr("loading")
 	e.RemoveAttr("srcset")
+	w, _ := e.Attr("width")
+	if w == "0" {
+		e.RemoveAttr("width")
+	}
+	h, _ := e.Attr("height")
+	if h == "0" {
+		e.RemoveAttr("height")
+	}
 
 	src, _ := e.Attr("src")
 	switch {
@@ -274,19 +282,19 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 		}
 
 		// add image
-		reader, err := os.Open(mediaFile)
+		file, err := os.Open(mediaFile)
 		if err != nil {
 			log.Printf("cannot open %s: %s", mediaFile, err)
 			return
 		}
-		defer reader.Close()
+		defer file.Close()
 
 		mediaCID = md5str(src) + fmime.Extension()
 		mediaCIDs[src] = mediaCID
 
-		attachment, err := mail.AttachWithHeaders(reader, mediaCID, fmime.String(), header)
+		attachment, err := mail.AttachWithHeaders(file, mediaCID, fmime.String(), header)
 		if err != nil {
-			log.Printf("cannot attach %s: %s", reader.Name(), err)
+			log.Printf("cannot attach %s: %s", file.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true
