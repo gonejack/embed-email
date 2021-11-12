@@ -26,7 +26,7 @@ import (
 )
 
 type options struct {
-	RetainGif bool `name:"retain-gif" help:"will not convert gif into mp4.'"`
+	RetainGif bool `name:"retain-gif" help:"will not convert gif into mp4."`
 	Verbose   bool `short:"v" help:"Verbose printing."`
 
 	Eml []string `arg:"" optional:""`

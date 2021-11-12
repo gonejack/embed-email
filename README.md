@@ -24,6 +24,6 @@ Arguments:
 
 Flags:
   -h, --help          Show context-sensitive help.
-      --retain-gif    will not convert gif into mp4.'
+      --retain-gif    will not convert gif into mp4.
   -v, --verbose       Verbose printing.
 ```
