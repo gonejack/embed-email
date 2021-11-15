@@ -8,7 +8,7 @@ require (
 	github.com/djherbis/times v1.5.0
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gabriel-vasile/mimetype v1.3.1
-	github.com/gonejack/email v1.0.6
+	github.com/gonejack/email v1.0.7
 	github.com/gonejack/get v1.0.9
 )
 
