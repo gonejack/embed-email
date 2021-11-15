@@ -226,7 +226,7 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
 
 	return downloads
 }
-func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCIDs, mediaFiles map[string]string) {
+func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids, mediaFiles map[string]string) {
 	e.RemoveAttr("loading")
 	e.RemoveAttr("srcset")
 	w, _ := e.Attr("width")
@@ -247,9 +247,9 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 	case strings.HasPrefix(src, "cid:"):
 		return
 	case strings.HasPrefix(src, "http"):
-		mediaCID, exist := mediaCIDs[src]
+		cid, exist := cids[src]
 		if exist {
-			e.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
+			e.SetAttr("src", fmt.Sprintf("cid:%s", cid))
 			return
 		}
 
@@ -279,6 +279,7 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 				t = s.BirthTime()
 			}
 			header.Set("last-modified", t.Format(http.TimeFormat))
+			header.Set("content-location", src)
 		}
 
 		// add image
@@ -289,17 +290,17 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, mediaCID
 		}
 		defer file.Close()
 
-		mediaCID = md5str(src) + fmime.Extension()
-		mediaCIDs[src] = mediaCID
+		cid = md5str(src) + fmime.Extension()
+		cids[src] = cid
 
-		attachment, err := mail.AttachWithHeaders(file, mediaCID, fmime.String(), header)
+		attachment, err := mail.AttachWithHeaders(file, cid, fmime.String(), header)
 		if err != nil {
 			log.Printf("cannot attach %s: %s", file.Name(), err)
 			return
 		}
 		attachment.HTMLRelated = true
 
-		e.SetAttr("src", fmt.Sprintf("cid:%s", mediaCID))
+		e.SetAttr("src", fmt.Sprintf("cid:%s", cid))
 	default:
 		log.Printf("unsupported image reference[src=%s]", src)
 	}
