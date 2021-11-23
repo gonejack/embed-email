@@ -20,7 +20,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/dustin/go-humanize"
 	"github.com/gonejack/email"
-	"github.com/gonejack/gx"
+	"github.com/gonejack/gex"
 )
 
 type options struct {
@@ -126,21 +126,21 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	return mail, nil
 }
 func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
-	var bat gx.Batch
+	var bat gex.Batch
 
 	doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
 		if src, _ := img.Attr("src"); strings.HasPrefix(src, "http") {
-			bat.Add(gx.NewTask(src).SetOutputDir(c.MediaDir))
+			bat.Add(gex.NewTask(src).SetOutputDir(c.MediaDir))
 		}
 	})
 
 	saves := make(map[string]media)
-	bat.OnStart(func(t *gx.Task) {
+	bat.OnStart(func(t *gex.Task) {
 		if c.Verbose {
 			log.Printf("download %s => %s", t.URL(), t.Path())
 		}
 	})
-	bat.OnStop(func(t *gx.Task) {
+	bat.OnStop(func(t *gex.Task) {
 		if r := t.Result(); r.Err == nil {
 			if c.Verbose {
 				log.Printf("download %s as %s done", t.URL(), r.Path)
