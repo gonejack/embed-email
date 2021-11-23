@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"crypto/md5"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,17 +11,16 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/alecthomas/kong"
-	"github.com/djherbis/times"
 	"github.com/dustin/go-humanize"
-	"github.com/gabriel-vasile/mimetype"
 	"github.com/gonejack/email"
-	"github.com/gonejack/get"
+	"github.com/gonejack/gx"
 )
 
 type options struct {
@@ -115,59 +113,6 @@ func (c *EmbedEmail) process() (err error) {
 
 	return
 }
-func (c *EmbedEmail) convertGif(doc *goquery.Document, media map[string]string) {
-	_, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		log.Printf("ffmpeg not found, will not convert gif into mp4")
-		return
-	}
-
-	doc.Find("img").Each(func(i int, img *goquery.Selection) {
-		src, _ := img.Attr("src")
-		if src == "" {
-			return
-		}
-
-		u, err := url.Parse(src)
-		if err != nil || !strings.HasSuffix(u.Path, ".gif") {
-			return
-		}
-		u.RawQuery = ""
-
-		gif, exist := media[src]
-		if !exist {
-			return
-		}
-
-		info, err := os.Stat(gif)
-		if err != nil || info.Size() < 300*humanize.KiByte {
-			return
-		}
-
-		mp4src := u.String() + ".mp4"
-		mp4 := gif + ".mp4"
-
-		// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
-		cmd := exec.Command(
-			"ffmpeg",
-			"-y", // overwrite output
-			"-i", gif,
-			"-movflags", "faststart",
-			"-pix_fmt", "yuv420p",
-			"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
-			mp4,
-		)
-		err = cmd.Run()
-		if err != nil {
-			log.Printf("convert %s => %s error: %s", gif, mp4, err)
-			return
-		}
-
-		tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
-		media[mp4src] = mp4
-		img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4src))
-	})
-}
 func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	file, err := os.Open(eml)
 	if err != nil {
@@ -180,53 +125,95 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	}
 	return mail, nil
 }
-func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]string {
-	downloads := make(map[string]string)
-	tasks := get.NewDownloadTasks()
+func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
+	var bat gx.Batch
 
 	doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
-		src, _ := img.Attr("src")
-
-		if !strings.HasPrefix(src, "http") {
-			return
+		if src, _ := img.Attr("src"); strings.HasPrefix(src, "http") {
+			bat.Add(gx.NewTask(src).SetOutputDir(c.MediaDir))
 		}
-
-		localpath, exist := downloads[src]
-		if exist {
-			return
-		}
-
-		uri, err := url.Parse(src)
-		if err != nil {
-			log.Printf("parse %s fail: %s", src, err)
-			return
-		}
-		localpath = filepath.Join(c.MediaDir, fmt.Sprintf("%s%s", md5str(src), filepath.Ext(uri.Path)))
-
-		downloads[src] = localpath
-		tasks.Add(src, localpath)
 	})
 
-	g := get.Default()
-	g.OnEachStart = func(t *get.DownloadTask) {
+	saves := make(map[string]media)
+	bat.OnStart(func(t *gx.Task) {
 		if c.Verbose {
-			log.Printf("download %s => %s", t.Link, t.Path)
+			log.Printf("download %s => %s", t.URL(), t.Path())
 		}
+	})
+	bat.OnStop(func(t *gx.Task) {
+		if r := t.Result(); r.Err == nil {
+			if c.Verbose {
+				log.Printf("download %s as %s done", t.URL(), r.Path)
+			}
+			saves[t.URL()] = media{
+				src:   r.URL,
+				path:  r.Path,
+				mime:  r.Mime(),
+				mtime: r.MTime(),
+			}
+		} else {
+			log.Printf("download %s as %s failed: %s", t.URL(), t.Path(), r.Err)
+		}
+	})
+	bat.Run()
+
+	return saves
+}
+func (c *EmbedEmail) convertGif(doc *goquery.Document, saves map[string]media) {
+	_, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		log.Printf("ffmpeg not found, will not convert gif into mp4")
+		return
 	}
-	g.OnEachStop = func(t *get.DownloadTask) {
-		if t.Err != nil {
-			log.Printf("download %s as %s failed: %s", t.Link, t.Path, t.Err)
+
+	doc.Find("img").Each(func(i int, img *goquery.Selection) {
+		src, _ := img.Attr("src")
+		if src == "" {
 			return
 		}
-		if c.Verbose {
-			log.Printf("download %s as %s done", t.Link, t.Path)
+		u, e := url.Parse(src)
+		if e != nil || path.Ext(u.Path) != ".gif" {
+			return
 		}
-	}
-	g.Batch(tasks, 3, time.Minute*2)
+		u.RawQuery = ""
 
-	return downloads
+		gif, exist := saves[src]
+		if !exist {
+			return
+		}
+		stat, e := os.Stat(gif.path)
+		if e != nil || stat.Size() < 300*humanize.KiByte {
+			return
+		}
+
+		mp4 := media{
+			src:   u.String() + ".mp4",
+			path:  gif.path + ".mp4",
+			mime:  "video/mp4",
+			mtime: gif.mtime,
+		}
+
+		// https://unix.stackexchange.com/questions/40638/how-to-do-i-convert-an-animated-gif-to-an-mp4-or-mv4-on-the-command-line
+		c := exec.Command(
+			"ffmpeg",
+			"-y", // overwrite output
+			"-i", gif.path,
+			"-movflags", "faststart",
+			"-pix_fmt", "yuv420p",
+			"-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+			mp4.path,
+		)
+
+		if e = c.Run(); e == nil {
+			saves[mp4.src] = mp4
+			tpl := `<video autoplay loop muted playsinline><source src="%s" type="video/mp4"></video>`
+			img.ReplaceWithHtml(fmt.Sprintf(tpl, mp4.src))
+		} else {
+			log.Printf("convert %s => %s error: %s", gif.path, mp4.path, e)
+		}
+	})
 }
-func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids, mediaFiles map[string]string) {
+func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids map[string]string, saves map[string]media) {
 	e.RemoveAttr("loading")
 	e.RemoveAttr("srcset")
 	w, _ := e.Attr("width")
@@ -253,52 +240,38 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids, me
 			return
 		}
 
-		mediaFile := mediaFiles[src]
+		save, exist := saves[src]
+		if !exist {
+			log.Printf("missing local file of %s", src)
+			return
+		}
 		if c.Verbose {
-			log.Printf("replace %s as %s", src, mediaFile)
+			log.Printf("replace %s as %s", src, save.path)
 		}
 
-		// check mime
-		fmime, err := mimetype.DetectFile(mediaFile)
-		switch {
-		case err != nil:
-			log.Printf("cannot detect mime of %s: %s", src, err)
-			return
-		case strings.HasPrefix(fmime.String(), "video"):
-		case strings.HasPrefix(fmime.String(), "image"):
-		default:
-			log.Printf("mime of %s is %s instead of images", src, fmime.String())
-			return
-		}
-
-		// read time
-		header := make(textproto.MIMEHeader)
-		if s, e := times.Stat(mediaFile); e == nil {
-			t := s.ModTime()
-			if s.HasBirthTime() {
-				t = s.BirthTime()
-			}
-			header.Set("last-modified", t.Format(http.TimeFormat))
-			header.Set("content-location", src)
-		}
-
-		// add image
-		file, err := os.Open(mediaFile)
-		if err != nil {
-			log.Printf("cannot open %s: %s", mediaFile, err)
-			return
-		}
-		defer file.Close()
-
-		cid = md5str(src) + fmime.Extension()
+		cid = save.path
 		cids[src] = cid
 
-		attachment, err := mail.AttachWithHeaders(file, cid, fmime.String(), header)
+		// add image
+		f, err := os.Open(save.path)
 		if err != nil {
-			log.Printf("cannot attach %s: %s", file.Name(), err)
+			log.Printf("cannot open %s: %s", save.path, err)
 			return
 		}
-		attachment.HTMLRelated = true
+		defer f.Close()
+
+		hdr := make(textproto.MIMEHeader)
+		{
+			hdr.Set("last-modified", save.mtime.Format(http.TimeFormat))
+			hdr.Set("content-location", src)
+		}
+
+		att, err := mail.AttachWithHeaders(f, cid, save.mime, hdr)
+		if err != nil {
+			log.Printf("cannot attach %s: %s", f.Name(), err)
+			return
+		}
+		att.HTMLRelated = true
 
 		e.SetAttr("src", fmt.Sprintf("cid:%s", cid))
 	default:
@@ -306,6 +279,10 @@ func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids, me
 	}
 }
 
-func md5str(s string) string {
-	return fmt.Sprintf("%x", md5.Sum([]byte(s)))
+type media struct {
+	src   string
+	path  string
+	mime  string
+	ext   string
+	mtime time.Time
 }
