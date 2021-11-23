@@ -126,36 +126,37 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	return mail, nil
 }
 func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
-	var bat gex.Batch
-
-	doc.Find("img,video").Each(func(i int, img *goquery.Selection) {
-		if src, _ := img.Attr("src"); strings.HasPrefix(src, "http") {
-			bat.Add(gex.NewTask(src).SetOutputDir(c.MediaDir))
-		}
-	})
-
 	saves := make(map[string]media)
-	bat.OnStart(func(t *gex.Task) {
+	bat := gex.NewBatch(3)
+	doc.Find("img,video,source").Each(func(i int, img *goquery.Selection) {
+		src, _ := img.Attr("src")
+		if strings.HasPrefix(src, "http") {
+			r := gex.NewRequest(c.MediaDir, src)
+			r.Timeout = time.Minute * 5
+			bat.Add(r)
+		}
+	})
+	bat.OnStart(func(t *gex.Request) {
 		if c.Verbose {
-			log.Printf("download %s => %s", t.URL(), t.Path())
+			log.Printf("download %s => %s", t.Url, t.Output)
 		}
 	})
-	bat.OnStop(func(t *gex.Task) {
-		if r := t.Result(); r.Err == nil {
-			if c.Verbose {
-				log.Printf("download %s as %s done", t.URL(), r.Path)
-			}
-			saves[t.URL()] = media{
-				src:   r.URL,
-				path:  r.Path,
-				mime:  r.Mime(),
-				mtime: r.MTime(),
-			}
-		} else {
-			log.Printf("download %s as %s failed: %s", t.URL(), t.Path(), r.Err)
+	bat.OnStop(func(r *gex.Request, err error) {
+		if err != nil {
+			log.Printf("download %s as %s failed: %s", r.Url, r.Output, err)
+			return
+		}
+		if c.Verbose {
+			log.Printf("download %s as %s done", r.Url, r.Output)
+		}
+		saves[r.Url] = media{
+			src:   r.Url,
+			path:  r.Output,
+			mime:  r.Response.Mime(),
+			mtime: r.Response.ModTime(),
 		}
 	})
-	bat.Run()
+	bat.Run(nil)
 
 	return saves
 }
@@ -283,6 +284,5 @@ type media struct {
 	src   string
 	path  string
 	mime  string
-	ext   string
 	mtime time.Time
 }
