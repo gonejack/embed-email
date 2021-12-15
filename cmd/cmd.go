@@ -83,6 +83,10 @@ func (c *EmbedEmail) process() (err error) {
 			return fmt.Errorf("cannot parse HTML: %s", err)
 		}
 
+		if base := mail.Headers.Get("content-base"); base != "" {
+			c.patchRef(base, doc)
+		}
+
 		saves := c.saveMedia(doc)
 		cids := make(map[string]string)
 
@@ -130,6 +134,15 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 	bat := gex.NewBatch(3)
 	doc.Find("img,video,source").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
+
+		switch {
+		case src == "":
+			return
+		case strings.HasPrefix(src, "data:"):
+			return
+		case strings.HasPrefix(src, "cid:"):
+			return
+		}
 		if strings.HasPrefix(src, "http") {
 			r := gex.NewRequest(c.MediaDir, src)
 			r.Timeout = time.Minute * 5
@@ -159,6 +172,39 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 	bat.Run(nil)
 
 	return saves
+}
+func (c *EmbedEmail) patchRef(base string, doc *goquery.Document) {
+	b, err := url.Parse(base)
+	if err != nil {
+		return
+	}
+	doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
+		src, _ := e.Attr("src")
+		switch {
+		case src == "":
+			return
+		case strings.HasPrefix(src, "data:"):
+			return
+		case strings.HasPrefix(src, "cid:"):
+			return
+		case strings.HasPrefix(src, "http:"):
+			return
+		case strings.HasPrefix(src, "https:"):
+			return
+		default:
+			u, err := url.Parse(src)
+			if err != nil {
+				return
+			}
+			if u.Scheme == "" {
+				u.Scheme = b.Scheme
+			}
+			if u.Host == "" {
+				u.Host = b.Host
+			}
+			e.SetAttr("src", u.String())
+		}
+	})
 }
 func (c *EmbedEmail) convertGif(doc *goquery.Document, saves map[string]media) {
 	_, err := exec.LookPath("ffmpeg")
