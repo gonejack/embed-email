@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/gonejack/embed-email/cmd"
+	"github.com/gonejack/embed-email/embedemail"
 )
 
 func init() {
@@ -12,10 +12,10 @@ func init() {
 }
 
 func main() {
-	c := cmd.EmbedEmail{
-		MediaDir: "media",
+	cmd := embedemail.EmbedEmail{
+		Options: embedemail.MustParseOptions(),
 	}
-	err := c.Run()
+	err := cmd.Run()
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,4 +1,4 @@
-package cmd
+package embedemail
 
 import (
 	"bytes"
@@ -14,45 +14,30 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/alecthomas/kong"
 	"github.com/dustin/go-humanize"
 	"github.com/gonejack/email"
 	"github.com/gonejack/gex"
 )
 
-type options struct {
-	RetainGif bool `name:"retain-gif" help:"will not convert gif into mp4."`
-	Verbose   bool `short:"v" help:"Verbose printing."`
-
-	Eml []string `arg:"" optional:""`
-}
-
 type EmbedEmail struct {
-	options
-	MediaDir string
+	Options
 }
 
 func (c *EmbedEmail) Run() (err error) {
-	kong.Parse(&c.options,
-		kong.Name("embed-email"),
-		kong.Description("Command line tool for embed images within email."),
-		kong.UsageOnError(),
-	)
+	if c.About {
+		fmt.Println("Visit https://github.com/gonejack/embed-email")
+		return
+	}
 	if len(c.Eml) == 0 {
 		c.Eml, _ = filepath.Glob("*.eml")
 	}
 	if len(c.Eml) == 0 {
 		return errors.New("not .eml file found")
 	}
-
-	err = os.MkdirAll(c.MediaDir, 0777)
-	if err != nil {
-		return fmt.Errorf("cannot make dir %s", err)
-	}
-
 	return c.process()
 }
 func (c *EmbedEmail) process() (err error) {
@@ -134,7 +119,6 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 	bat := gex.NewBatch(3)
 	doc.Find("img,video,source").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
-
 		switch {
 		case src == "":
 			return
@@ -144,6 +128,7 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 			return
 		}
 		if strings.HasPrefix(src, "http") {
+			_ = os.MkdirAll(c.MediaDir, 0766)
 			r := gex.NewRequest(c.MediaDir, src)
 			r.Timeout = time.Minute * 5
 			bat.Add(r)
@@ -207,12 +192,7 @@ func (c *EmbedEmail) patchRef(base string, doc *goquery.Document) {
 	})
 }
 func (c *EmbedEmail) convertGif(doc *goquery.Document, saves map[string]media) {
-	_, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		log.Printf("ffmpeg not found, will not convert gif into mp4")
-		return
-	}
-
+	var once sync.Once
 	doc.Find("img").Each(func(i int, img *goquery.Selection) {
 		src, _ := img.Attr("src")
 		if src == "" {
@@ -220,6 +200,11 @@ func (c *EmbedEmail) convertGif(doc *goquery.Document, saves map[string]media) {
 		}
 		u, e := url.Parse(src)
 		if e != nil || path.Ext(u.Path) != ".gif" {
+			return
+		}
+		_, e = exec.LookPath("ffmpeg")
+		if e != nil {
+			once.Do(func() { log.Printf("ffmpeg not installed, will not convert gif into mp4") })
 			return
 		}
 		u.RawQuery = ""
@@ -263,6 +248,7 @@ func (c *EmbedEmail) convertGif(doc *goquery.Document, saves map[string]media) {
 func (c *EmbedEmail) changeRef(e *goquery.Selection, mail *email.Email, cids map[string]string, saves map[string]media) {
 	e.RemoveAttr("loading")
 	e.RemoveAttr("srcset")
+
 	w, _ := e.Attr("width")
 	if w == "0" {
 		e.RemoveAttr("width")
