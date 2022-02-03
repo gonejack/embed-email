@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/alecthomas/kong"
 )
@@ -30,7 +31,7 @@ func MustParseOptions() (opts Options) {
 		kong.Description("This command parse email content, download remote images and replace them as inline images"),
 		kong.UsageOnError(),
 	)
-	if len(opts.Eml) == 0 {
+	if len(opts.Eml) == 0 || (runtime.GOOS == "windows" && opts.Eml[0] == "*.eml") {
 		opts.Eml, _ = filepath.Glob("*.eml")
 	}
 	return
