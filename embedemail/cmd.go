@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -28,19 +27,12 @@ type EmbedEmail struct {
 }
 
 func (c *EmbedEmail) Run() (err error) {
-	if c.About {
-		fmt.Println("Visit https://github.com/gonejack/embed-email")
-		return
-	}
-	if len(c.Eml) == 0 {
-		c.Eml, _ = filepath.Glob("*.eml")
-	}
 	if len(c.Eml) == 0 {
 		return errors.New("not .eml file found")
 	}
-	return c.process()
+	return c.run()
 }
-func (c *EmbedEmail) process() (err error) {
+func (c *EmbedEmail) run() (err error) {
 	for _, eml := range c.Eml {
 		if strings.HasSuffix(eml, ".embed.eml") {
 			if c.Verbose {
@@ -134,9 +126,9 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 			bat.Add(r)
 		}
 	})
-	bat.OnStart(func(t *gex.Request) {
+	bat.OnStart(func(r *gex.Request) {
 		if c.Verbose {
-			log.Printf("download %s => %s", t.Url, t.Output)
+			log.Printf("download %s => %s", r.Url, r.Output)
 		}
 	})
 	bat.OnStop(func(r *gex.Request, err error) {
