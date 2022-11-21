@@ -11,8 +11,8 @@ github.com/dustin/go-humanize v1.0.0 h1:VSnTsYCnlFHaM2/igO1h6X3HA71jcobQuxemgkq4
 github.com/dustin/go-humanize v1.0.0/go.mod h1:HtrtbFcZ19U5GC7JDqmcUSB87Iq5E25KnS6fMYU6eOk=
 github.com/gonejack/email v1.0.7 h1:53g/oGaf1wI+57YJr3lvJeu+3/wbIj8e0HGBikzLl2w=
 github.com/gonejack/email v1.0.7/go.mod h1:1FpRMitAmatCEv1+voUuNL4QOSr7rjbret4xz2H76GI=
-github.com/gonejack/gex v0.0.2 h1:G/Y4xARhRgFF8/orqVE+NWlDp2eXO1/rhlRYwuNOGX8=
-github.com/gonejack/gex v0.0.2/go.mod h1:Yc/nICdSRsWr8/MwSuY0qUKC/RcVEXskdwDzidTmXko=
+github.com/gonejack/gex v0.0.3 h1:xOyITVRmxvtQO/GpWffljpUv1ejGqiDqhw++G3LYtdg=
+github.com/gonejack/gex v0.0.3/go.mod h1:6VkZa+x9/aLfznePz2O/ksmJpGniR8fExInyCX6l3yk=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
