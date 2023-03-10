@@ -19,6 +19,7 @@ func (a about) BeforeApply() (err error) {
 
 type Options struct {
 	RetainGif bool     `name:"retain-gif" help:"Will not convert gif into mp4."`
+	UserAgent string   `short:"u" name:"user-agent" help:"Set header field User-Agent of http requests" default:"Wget/1.21.3"`
 	Verbose   bool     `short:"v" help:"Verbose printing."`
 	MediaDir  string   `hidden:"" default:"media"`
 	About     about    `help:"About."`

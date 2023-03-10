@@ -7,7 +7,7 @@ require (
 	github.com/alecthomas/kong v0.2.17
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gonejack/email v1.0.7
-	github.com/gonejack/gex v0.0.3
+	github.com/gonejack/gex v0.0.4
 )
 
 require (
