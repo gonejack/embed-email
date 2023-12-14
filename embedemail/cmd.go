@@ -122,8 +122,8 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 		if strings.HasPrefix(src, "http") {
 			_ = os.MkdirAll(c.MediaDir, 0766)
 			r := gex.NewRequest(c.MediaDir, src)
-			r.SetTimeout(time.Minute * 5)
-			r.SetHeader("user-agent", c.UserAgent)
+			r.Timeout = time.Minute * 5
+			r.Header.Set("user-agent", c.UserAgent)
 			bat.Add(r)
 		}
 	})
