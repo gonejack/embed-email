@@ -109,16 +109,8 @@ func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 	saves := make(map[string]media)
 	bat := gex.NewBatch(3)
-	doc.Find("img,video,source").Each(func(i int, img *goquery.Selection) {
-		src, _ := img.Attr("src")
-		switch {
-		case src == "":
-			return
-		case strings.HasPrefix(src, "data:"):
-			return
-		case strings.HasPrefix(src, "cid:"):
-			return
-		}
+	doc.Find("img,video,source").Each(func(i int, e *goquery.Selection) {
+		src, _ := e.Attr("src")
 		if strings.HasPrefix(src, "http") {
 			_ = os.MkdirAll(c.MediaDir, 0766)
 			r := gex.NewRequest(c.MediaDir, src)
@@ -148,7 +140,6 @@ func (c *EmbedEmail) saveMedia(doc *goquery.Document) map[string]media {
 		}
 	})
 	bat.Run(nil)
-
 	return saves
 }
 func (c *EmbedEmail) patchRef(base string, doc *goquery.Document) {
@@ -160,15 +151,10 @@ func (c *EmbedEmail) patchRef(base string, doc *goquery.Document) {
 		src, _ := e.Attr("src")
 		switch {
 		case src == "":
-			return
 		case strings.HasPrefix(src, "data:"):
-			return
 		case strings.HasPrefix(src, "cid:"):
-			return
 		case strings.HasPrefix(src, "http:"):
-			return
 		case strings.HasPrefix(src, "https:"):
-			return
 		default:
 			u, err := url.Parse(src)
 			if err != nil {
