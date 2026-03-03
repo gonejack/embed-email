@@ -57,7 +57,7 @@ func (c *EmbedEmail) run() (err error) {
 
 		doc, err := goquery.NewDocumentFromReader(bytes.NewReader(mail.HTML))
 		if err != nil {
-			return fmt.Errorf("cannot parse HTML: %s", err)
+			return fmt.Errorf("cannot parse HTML: %w", err)
 		}
 
 		if base := mail.Headers.Get("content-base"); base != "" {
@@ -77,18 +77,18 @@ func (c *EmbedEmail) run() (err error) {
 
 		html, err := doc.Html()
 		if err != nil {
-			return fmt.Errorf("cannot generate html: %s", err)
+			return fmt.Errorf("cannot generate html: %w", err)
 		}
 		mail.HTML = []byte(html)
 
 		data, err := mail.Bytes()
 		if err != nil {
-			return fmt.Errorf("cannot generate eml: %s", err)
+			return fmt.Errorf("cannot generate eml: %w", err)
 		}
 
 		err = os.WriteFile(embed, data, 0666)
 		if err != nil {
-			return fmt.Errorf("cannot write eml: %s", err)
+			return fmt.Errorf("cannot write eml: %w", err)
 		}
 	}
 
@@ -97,12 +97,12 @@ func (c *EmbedEmail) run() (err error) {
 func (c *EmbedEmail) openEmail(eml string) (*email.Email, error) {
 	file, err := os.Open(eml)
 	if err != nil {
-		return nil, fmt.Errorf("cannot open file: %s", err)
+		return nil, fmt.Errorf("cannot open file: %w", err)
 	}
 	defer file.Close()
 	mail, err := email.NewEmailFromReader(file)
 	if err != nil {
-		return nil, fmt.Errorf("cannot parse email: %s", err)
+		return nil, fmt.Errorf("cannot parse email: %w", err)
 	}
 	return mail, nil
 }
