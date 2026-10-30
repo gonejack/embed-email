@@ -6,7 +6,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/alecthomas/kong v1.2.0
 	github.com/dustin/go-humanize v1.0.1
-	github.com/gonejack/email v1.0.8
+	github.com/gonejack/email v1.0.9
 	github.com/gonejack/gex v0.1.1
 )
 
